@@ -1,0 +1,47 @@
+service: nextjs-hapi-lambda
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: local
+  region: us-east-1
+  endpointUrl: http://localhost:4566  # LocalStack endpoint
+  memorySize: 1024
+  timeout: 30
+  
+functions:
+  app:
+    handler: dist/server.handler
+    events:
+      - http:
+          path: /{proxy+}
+          method: ANY
+      - http:
+          path: /
+          method: ANY
+
+package:
+  individually: true
+  exclude:
+    - ./**
+  include:
+    - dist/**
+    - .next/**
+    - public/**
+    - node_modules/**
+
+plugins:
+  - serverless-localstack
+  - serverless-offline
+
+custom:
+  localstack:
+    stages:
+      - local
+    host: localhost
+    edgePort: 4566
+    autostart: true
+    lambda:
+      mountCode: true
+  serverless-offline:
+    httpPort: 3000

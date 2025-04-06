@@ -1,0 +1,57 @@
+services:
+  localstack:
+    container_name: "${LOCALSTACK_DOCKER_NAME:-localstack-main}"
+    image: localstack/localstack
+    ports:
+      - "127.0.0.1:4566:4566"            # LocalStack Gateway
+      - "127.0.0.1:4510-4559:4510-4559"  # external services port range
+    environment:
+      # LocalStack configuration
+      - DEBUG=${DEBUG:-1}
+      - SERVICES=lambda,apigateway,s3
+      # - LAMBDA_EXECUTOR=docker-reuse
+      # - DOCKER_HOST=unix:///var/run/docker.sock
+      - LOCALSTACK_PERSISTENCE=1
+      # - DOCKER_SDK_FROM_PATH=1
+    volumes:
+      - "${LOCALSTACK_VOLUME_DIR:-./volume}:/var/lib/localstack"
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost.localstack.cloud:4566/_localstack/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    # Add privileged mode to help with Docker socket access
+    privileged: true
+
+  nextjs-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.production
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - AWS_ENDPOINT=http://localhost.localstack.cloud:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+    depends_on:
+      localstack:
+        condition: service_healthy
+    restart: unless-stopped
+
+  aws-cli:
+    image: amazon/aws-cli
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - ./:/aws
+    depends_on:
+      - localstack
+    entrypoint: ["aws", "--endpoint-url=http://localhost.localstack.cloud:4566"]
+    profiles:
+      - tools
